@@ -116,69 +116,22 @@ func TestBits(t *testing.T) {
 	}
 }
 
-func TestParse(t *testing.T) {
+func TestParseSchedule(t *testing.T) {
+	tokyo, _ := time.LoadLocation("Asia/Tokyo")
 	entries := []struct {
 		expr     string
 		expected Schedule
 		err      string
 	}{
-		{
-			expr: "* 5 * * * *",
-			expected: &SpecSchedule{
-				Second: all(seconds),
-				Minute: 1 << 5,
-				Hour:   all(hours),
-				Dom:    all(dom),
-				Month:  all(months),
-				Dow:    all(dow),
-			},
-		},
-		{
-			expr: "* 5 j * * *",
-			err:  "Failed to parse int from",
-		},
-		{
-			expr:     "@every 5m",
-			expected: ConstantDelaySchedule{Delay: time.Duration(5) * time.Minute},
-		},
-		{
-			expr: "@every Xm",
-			err:  "Failed to parse duration",
-		},
-		{
-			expr: "@yearly",
-			expected: &SpecSchedule{
-				Second: 1 << seconds.min,
-				Minute: 1 << minutes.min,
-				Hour:   1 << hours.min,
-				Dom:    1 << dom.min,
-				Month:  1 << months.min,
-				Dow:    all(dow),
-			},
-		},
-		{
-			expr: "@annually",
-			expected: &SpecSchedule{
-				Second: 1 << seconds.min,
-				Minute: 1 << minutes.min,
-				Hour:   1 << hours.min,
-				Dom:    1 << dom.min,
-				Month:  1 << months.min,
-				Dow:    all(dow),
-			},
-		},
-		{
-			expr: "@unrecognized",
-			err:  "Unrecognized descriptor",
-		},
-		{
-			expr: "* * * *",
-			err:  "Expected 5 to 6 fields",
-		},
-		{
-			expr: "",
-			err:  "Empty spec string",
-		},
+		{"0 5 * * * *", every5min(time.Local)},
+		{"5 * * * *", every5min(time.Local)},
+		{"TZ=UTC  0 5 * * * *", every5min(time.UTC)},
+		{"TZ=UTC  5 * * * *", every5min(time.UTC)},
+		{"TZ=Asia/Tokyo 0 5 * * * *", every5min(tokyo)},
+		{"@every 5m", ConstantDelaySchedule{5 * time.Minute}},
+		{"@midnight", midnight(time.Local)},
+		{"TZ=UTC  @midnight", midnight(time.UTC)},
+		{"TZ=Asia/Tokyo @midnight", midnight(tokyo)},
 	}
 
 	for _, c := range entries {
@@ -228,7 +181,15 @@ func TestStandardSpecSchedule(t *testing.T) {
 			t.Errorf("%s => unexpected error %v", c.expr, err)
 		}
 		if !reflect.DeepEqual(actual, c.expected) {
-			t.Errorf("%s => expected %b, got %b", c.expr, c.expected, actual)
+			t.Errorf("%s => (expected) %v != %v (actual)", c.expr, c.expected, actual)
 		}
 	}
+}
+
+func every5min(loc *time.Location) *SpecSchedule {
+	return &SpecSchedule{1 << 0, 1 << 5, all(hours), all(dom), all(months), all(dow), loc}
+}
+
+func midnight(loc *time.Location) *SpecSchedule {
+	return &SpecSchedule{1, 1, 1, all(dom), all(months), all(dow), loc}
 }
