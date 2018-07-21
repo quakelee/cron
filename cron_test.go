@@ -10,7 +10,7 @@ import (
 // Many tests schedule a job for every second, and then wait at most a second
 // for it to run.  This amount is just slightly larger than 1 second to
 // compensate for a few milliseconds of runtime.
-const ONE_SECOND = 1*time.Second + 10*time.Millisecond
+const OneSecond = 1*time.Second + 10*time.Millisecond
 
 // Start and stop cron with no entries.
 func TestNoEntries(t *testing.T) {
@@ -18,7 +18,7 @@ func TestNoEntries(t *testing.T) {
 	cron.Start()
 
 	select {
-	case <-time.After(ONE_SECOND):
+	case <-time.After(OneSecond):
 		t.FailNow()
 	case <-stop(cron):
 	}
@@ -35,7 +35,7 @@ func TestStopCausesJobsToNotRun(t *testing.T) {
 	cron.AddFunc("* * * * * ?", func() { wg.Done() })
 
 	select {
-	case <-time.After(ONE_SECOND):
+	case <-time.After(OneSecond):
 		// No job ran!
 	case <-wait(wg):
 		t.FailNow()
@@ -54,7 +54,7 @@ func TestAddBeforeRunning(t *testing.T) {
 
 	// Give cron 2 seconds to run our job (which is always activated).
 	select {
-	case <-time.After(ONE_SECOND):
+	case <-time.After(OneSecond):
 		t.FailNow()
 	case <-wait(wg):
 	}
@@ -71,7 +71,7 @@ func TestAddWhileRunning(t *testing.T) {
 	cron.AddFunc("* * * * * ?", func() { wg.Done() })
 
 	select {
-	case <-time.After(ONE_SECOND):
+	case <-time.After(OneSecond):
 		t.FailNow()
 	case <-wait(wg):
 	}
@@ -89,7 +89,7 @@ func TestRemoveBeforeRunning(t *testing.T) {
 	defer cron.Stop()
 
 	select {
-	case <-time.After(ONE_SECOND):
+	case <-time.After(OneSecond):
 		// Success, shouldn't run
 	case <-wait(wg):
 		t.FailNow()
@@ -108,7 +108,7 @@ func TestRemoveWhileRunning(t *testing.T) {
 	cron.Remove(id)
 
 	select {
-	case <-time.After(ONE_SECOND):
+	case <-time.After(OneSecond):
 	case <-wait(wg):
 		t.FailNow()
 	}
@@ -126,13 +126,13 @@ func TestSnapshotEntries(t *testing.T) {
 
 	// Cron should fire in 2 seconds. After 1 second, call Entries.
 	select {
-	case <-time.After(ONE_SECOND):
+	case <-time.After(OneSecond):
 		cron.Entries()
 	}
 
 	// Even though Entries was called, the cron should fire at the 2 second mark.
 	select {
-	case <-time.After(ONE_SECOND):
+	case <-time.After(OneSecond):
 		t.FailNow()
 	case <-wait(wg):
 	}
@@ -161,7 +161,7 @@ func TestMultipleEntries(t *testing.T) {
 	defer cron.Stop()
 
 	select {
-	case <-time.After(ONE_SECOND):
+	case <-time.After(OneSecond):
 		t.FailNow()
 	case <-wait(wg):
 	}
@@ -181,7 +181,7 @@ func TestRunningJobTwice(t *testing.T) {
 	defer cron.Stop()
 
 	select {
-	case <-time.After(2 * ONE_SECOND):
+	case <-time.After(2 * OneSecond):
 		t.FailNow()
 	case <-wait(wg):
 	}
@@ -203,7 +203,7 @@ func TestRunningMultipleSchedules(t *testing.T) {
 	defer cron.Stop()
 
 	select {
-	case <-time.After(2 * ONE_SECOND):
+	case <-time.After(2 * OneSecond):
 		t.FailNow()
 	case <-wait(wg):
 	}
@@ -224,7 +224,7 @@ func TestLocalTimezone(t *testing.T) {
 	defer cron.Stop()
 
 	select {
-	case <-time.After(ONE_SECOND):
+	case <-time.After(OneSecond):
 		t.FailNow()
 	case <-wait(wg):
 	}
@@ -256,7 +256,7 @@ func TestJob(t *testing.T) {
 	defer cron.Stop()
 
 	select {
-	case <-time.After(ONE_SECOND):
+	case <-time.After(OneSecond):
 		t.FailNow()
 	case <-wait(wg):
 	}
