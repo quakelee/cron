@@ -2,7 +2,12 @@
 package cron
 
 import (
+	"errors"
+	"log"
+	"reflect"
+	"runtime"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -91,20 +96,51 @@ func New() *Cron {
 // FuncJob is a wrapper that turns a func() into a cron.Job
 type FuncJob func()
 
+// Run implemented Job's interface for FuncJob
 func (f FuncJob) Run() { f() }
 
+// FuncJobComplex is a wrapper that turns a func() with parameters into a cron.Job
+type FuncJobComplex struct {
+	function interface{}
+	params   []interface{}
+}
+
+// Run implemented Job's interface for FuncJobComplex
+func (fc FuncJobComplex) Run() {
+	f := reflect.ValueOf(fc.function)
+	in := make([]reflect.Value, len(fc.params))
+	for k, param := range fc.params {
+		in[k] = reflect.ValueOf(param)
+	}
+	f.Call(in)
+}
+
 // AddFunc adds a func to the Cron to be run on the given schedule.
-func (c *Cron) AddFunc(spec string, cmd func()) (EntryID, error) {
-	return c.AddJob(spec, FuncJob(cmd))
+func (c *Cron) AddFunc(spec string, cmd interface{}, params ...interface{}) (EntryID, error) {
+	f := reflect.ValueOf(cmd)
+	if len(params) != f.Type().NumIn() {
+		var refP = reflect.ValueOf(cmd).Pointer()
+		var refName = runtime.FuncForPC(refP).Name()
+		var file, line = runtime.FuncForPC(refP).FileLine(runtime.FuncForPC(refP).Entry())
+		log.Printf("the number of param is not adapted for function %v [ line: %v - file: %v ]", refName, line, file)
+		return 0, errors.New("the number of param is not adapted for function " + refName + " [ line: " + strconv.FormatInt(int64(line), 10) + " - file: " + file + " ]")
+	}
+	return c.AddJob(spec, FuncJobComplex{cmd, params})
 }
 
 // AddJob adds a Job to the Cron to be run on the given schedule.
-func (c *Cron) AddJob(spec string, cmd Job) (EntryID, error) {
+func (c *Cron) AddJob(spec string, cmd interface{}) (EntryID, error) {
 	schedule, err := Parse(spec)
 	if err != nil {
 		return 0, err
 	}
-	return c.Schedule(schedule, cmd), nil
+	switch converted := cmd.(type) {
+	case Job:
+		return c.Schedule(schedule, converted), nil
+	case FuncJobComplex:
+		return c.Schedule(schedule, converted), nil
+	}
+	return 0, errors.New("Unknown type")
 }
 
 // Schedule adds a Job to the Cron to be run on the given schedule.
