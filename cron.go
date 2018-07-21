@@ -1,5 +1,5 @@
 // Package cron implements a cron spec parser and runner.
-package cron // import "gopkg.in/robfig/cron.v2"
+package cron
 
 import (
 	"sort"
@@ -154,7 +154,7 @@ func (c *Cron) Remove(id EntryID) {
 // Start the cron scheduler in its own go-routine.
 func (c *Cron) Start() {
 	c.running = true
-	go c.run()
+	c.run()
 }
 
 // run the scheduler.. this is private just due to the need to synchronize
