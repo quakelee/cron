@@ -81,13 +81,8 @@ func (s byTime) Less(i, j int) bool {
 	return s[i].Next.Before(s[j].Next)
 }
 
-// New returns a new Cron job runner, in the Local time zone.
+// New returns a new Cron job runner.
 func New() *Cron {
-	return NewWithLocation(time.Now().Location())
-}
-
-// NewWithLocation returns a new Cron job runner.
-func NewWithLocation(location *time.Location) *Cron {
 	return &Cron{
 		entries:  nil,
 		add:      make(chan *Entry),
@@ -95,8 +90,6 @@ func NewWithLocation(location *time.Location) *Cron {
 		snapshot: make(chan []Entry),
 		remove:   make(chan EntryID),
 		running:  false,
-		ErrorLog: nil,
-		location: location,
 	}
 }
 
@@ -196,9 +189,6 @@ func (c *Cron) Remove(id EntryID) {
 
 // Start the cron scheduler in its own go-routine.
 func (c *Cron) Start() {
-	if c.running {
-		return
-	}
 	c.running = true
 	c.run()
 }
@@ -207,7 +197,7 @@ func (c *Cron) Start() {
 // access to the 'running' state variable.
 func (c *Cron) run() {
 	// Figure out the next activation times for each entry.
-	now := c.now()
+	now := time.Now().Local()
 	for _, entry := range c.entries {
 		entry.Next = entry.Schedule.Next(now)
 	}
@@ -216,38 +206,34 @@ func (c *Cron) run() {
 		// Determine the next entry to run.
 		sort.Sort(byTime(c.entries))
 
-		var timer *time.Timer
+		var effective time.Time
 		if len(c.entries) == 0 || c.entries[0].Next.IsZero() {
 			// If there are no entries yet, just sleep - it still handles new entries
 			// and stop requests.
-			timer = time.NewTimer(100000 * time.Hour)
+			effective = now.AddDate(10, 0, 0)
 		} else {
-			timer = time.NewTimer(c.entries[0].Next.Sub(now))
+			effective = c.entries[0].Next
 		}
 
-		for {
-			select {
-			case now = <-timer.C:
-				now = now.In(c.location)
-				// Run every entry whose next time was less than now
-				for _, e := range c.entries {
-					if e.Next.After(now) || e.Next.IsZero() {
-						break
-					}
-					go c.runWithRecovery(e.Job)
-					e.Prev = e.Next
-					e.Next = e.Schedule.Next(now)
+		select {
+		case now = <-time.After(effective.Sub(now)):
+			// Run every entry whose next time was this effective time.
+			for _, e := range c.entries {
+				if e.Next != effective {
+					break
 				}
+				go e.Job.Run()
+				e.Prev = e.Next
+				e.Next = e.Schedule.Next(effective)
+			}
+			continue
 
-			case newEntry := <-c.add:
-				timer.Stop()
-				now = c.now()
-				newEntry.Next = newEntry.Schedule.Next(now)
-				c.entries = append(c.entries, newEntry)
+		case newEntry := <-c.add:
+			c.entries = append(c.entries, newEntry)
+			newEntry.Next = newEntry.Schedule.Next(now)
 
-			case <-c.snapshot:
-				c.snapshot <- c.entrySnapshot()
-				continue
+		case <-c.snapshot:
+			c.snapshot <- c.entrySnapshot()
 
 		case id := <-c.remove:
 			c.removeEntry(id)
@@ -255,18 +241,13 @@ func (c *Cron) run() {
 		case <-c.stop:
 			return
 		}
-	}
-}
 
 		now = time.Now().Local()
 	}
 }
 
-// Stop stops the cron scheduler if it is running; otherwise it does nothing.
+// Stop the cron scheduler.
 func (c *Cron) Stop() {
-	if !c.running {
-		return
-	}
 	c.stop <- struct{}{}
 	c.running = false
 }
